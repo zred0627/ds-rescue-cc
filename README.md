@@ -1,6 +1,6 @@
 # ds-rescue-cc
 
-> **Cross-family adversarial review for your plans and commits — powered by DeepSeek, 50× cheaper than running Codex on every review.**
+> **Cross-family adversarial review for your plans and commits — powered by DeepSeek, 50x cheaper than running Codex on every review.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go 1.22+](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
@@ -85,7 +85,7 @@ ds-rescue-cc is designed around a different cost curve.
 ### Cost
 
 DeepSeek v4-pro costs approximately **$0.01 per review call** at typical input/output
-sizes. That is 50× cheaper than an equivalent Codex review call.
+sizes. That is 50x cheaper than an equivalent Codex review call.
 
 At $0.01 per review, the economic barrier to habitual use effectively disappears.
 Running a review on every meaningful commit feels free — because, at that price point,
