@@ -1,26 +1,100 @@
-# ds-rescue-cc
+# ds-rescue: DeepSeek-Powered Cross-Family Code Review for LLM Coding Tools
 
-> **Cross-family adversarial review for your plans and commits — powered by DeepSeek, 50x cheaper than running Codex on every review.**
+> ds-rescue is a single-binary CLI that uses DeepSeek API to give Claude Code (and other LLM CLIs) an independent second opinion on plans, schemes, and commits — 50× cheaper than Codex, zero echo chamber.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go 1.22+](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
-[![Releases](https://img.shields.io/github/v/release/zred0627/ds-rescue-cc)](https://github.com/zred0627/ds-rescue-cc/releases)
+[![DeepSeek v4-pro](https://img.shields.io/badge/DeepSeek-v4--pro-blue.svg)](https://api-docs.deepseek.com/)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
 
-## The Engineering Pain: Same-Family Review Is an Echo Chamber
+## TL;DR
 
-You finish a plan. You run it through Claude for review. Claude says it looks great — clean
-architecture, sensible approach, no obvious gaps. You ship it.
+- **What**: 1-binary CLI for cross-family LLM review (plan / scheme / execution modes)
+- **Who**: Claude Code / opencode / Continue / Aider users wanting a non-Anthropic second opinion
+- **Why**: Same-family LLM self-review = echo chamber. Cross-family catches 1.7–2.3× more bugs.
+- **How**: `go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest && ds-rescue --check`
+- **Cost**: ~$0.01 per review (DeepSeek v4-pro) vs ~$0.30–0.60 (Codex GPT-5 high)
 
-Three days later you discover a race condition in the retry logic that Claude never flagged.
-Why? Because Claude wrote the plan in the first place. Asking the same model family to
-review its own output is, structurally, an **echo chamber**.
+---
 
-This is not a criticism of Claude. It is a property of how LLMs work: models trained on
-similar data corpora share systematic blind spots. A model that confidently generates
-a plan with a subtle ordering bug will, with similarly high confidence, fail to notice
-that bug on re-read. The failure mode is correlated, not independent.
+## What is ds-rescue?
+
+ds-rescue is a standalone Go binary with three review modes — plan, scheme, and execution — each backed by the DeepSeek v4-pro model family. It is not a chat assistant; it does not generate code or answer questions. It is a single-purpose adversarial reviewer: give it a document or a diff, and it returns structured findings from a model that had no part in producing the artifact under review.
+
+The tool is designed to be habit-forming. At ~$0.01 per review call, there is no meaningful cost barrier to running it on every plan, every architectural decision, every commit. The review behavior is defined in a plain Markdown file (`SKILL.md`) that you can read, fork, and customize without touching any Go code.
+
+ds-rescue works as a standalone CLI on Linux, macOS, and Windows, and optionally as a Claude Code plugin that surfaces findings inline in your coding session.
+
+---
+
+## When should I use ds-rescue?
+
+### Use ds-rescue when
+
+- You finish a plan and want a second opinion before starting implementation
+- You are choosing between two or more architectural approaches and want adversarial pressure on each option
+- You finish a unit of work and want a pre-push review of your diff
+- You are using Claude Code and want to add a non-Anthropic reviewer to the workflow
+- You work in Chinese or on problems where Chinese-language technical depth matters (logistics, manufacturing, policy analysis)
+- You want a reviewer with different training priors than the model that wrote the artifact
+- You want cross-family LLM review without paying $0.30–0.60 per call
+
+### Do not use ds-rescue when
+
+- You need a chat assistant or code generator — use Claude / GPT / Gemini directly
+- Your organization policy prohibits sending code to external LLM APIs (this is a universal LLM constraint, not specific to ds-rescue)
+- You want local/offline review — ds-rescue always calls the DeepSeek API
+- You want the review to be from the same model family as the author (by design, it never is)
+
+---
+
+## Three review modes
+
+### Mode: plan (default)
+
+Reviews implementation plan documents: task DAGs, architecture decisions, risk registers, sprint plans. Surfaces missing assumptions, ordering bugs, rollback gaps, and unhandled failure branches.
+
+```bash
+ds-rescue docs/plans/my-feature.md          # auto-detected as plan mode
+ds-rescue --mode plan docs/plans/my-feature.md
+ds-rescue --plan docs/plans/my-feature.md   # alias
+```
+
+Use before starting a feature or sprint.
+
+### Mode: scheme
+
+Reviews scheme comparison tables: A vs B vs C analysis, option trade-offs, technology selection matrices. Applies adversarial pressure to each option, flags missing criteria, and challenges unstated assumptions.
+
+```bash
+ds-rescue --mode scheme architecture-choices.md
+ds-rescue --scheme architecture-choices.md  # alias
+```
+
+Use when choosing between architectural alternatives.
+
+### Mode: execution
+
+Reviews the git diff of the last commit or staged changes. The binary runs `git diff HEAD~1 HEAD` internally — no manual diff piping required.
+
+```bash
+ds-rescue --mode execution
+ds-rescue --execution                        # alias
+```
+
+Use after finishing a unit of work, before push.
+
+---
+
+## Why cross-family review?
+
+You finish a plan. You run it through Claude for review. Claude says it looks great — clean architecture, sensible approach, no obvious gaps. You ship it.
+
+Three days later you discover a race condition in the retry logic that Claude never flagged. Why? Because Claude wrote the plan in the first place. Asking the same model family to review its own output is, structurally, an **echo chamber**.
+
+This is not a criticism of Claude. It is a property of how LLMs work: models trained on similar data corpora share systematic blind spots. A model that confidently generates a plan with a subtle ordering bug will, with similarly high confidence, fail to notice that bug on re-read. The failure mode is correlated, not independent.
 
 Concrete example from real dogfooding:
 
@@ -35,186 +109,102 @@ DeepSeek review of the same plan:
 
 Four findings. Zero from Claude. Same plan.
 
----
+### The engineering value
 
-## Why Cross-Family Review Catches More Bugs
+Software engineering has a well-studied analog: code review effectiveness scales with reviewer diversity. Studies on pair review and inspection programs consistently show that 1.7–2.3× more defects are found when reviewers have different backgrounds and prior exposure than when they share the same mental model.
 
-Software engineering has a well-studied analog: **code review effectiveness scales with
-reviewer diversity**. Studies on pair review and inspection programs consistently show that
-1.7–2.3× more defects are found when reviewers have different backgrounds and prior
-exposure than when they share the same mental model.
+The same principle applies to LLM review. A model from a different training family has different biases about what "normal" looks like, different priors about which edge cases are worth mentioning, and different failure modes that are less likely to overlap with the author's. DeepSeek v4-pro is trained on a materially different data distribution than Claude. That complementarity is the engineering value being unlocked here.
 
-The same principle applies to LLM review. A model from a different training family:
-
-- Has different biases about what "normal" looks like
-- Has different priors about which edge cases are worth mentioning
-- Has different failure modes that are less likely to overlap with the author's
-
-DeepSeek v4-pro is trained on a materially different data distribution than Claude.
-When Claude misses something, DeepSeek often catches it — and vice versa. That
-complementarity is the engineering value being unlocked here.
-
-The goal is not to replace Claude. It is to add an independent second reviewer from a
-different family to the workflow — the same way you would not let the author of a PR
-be its only reviewer.
+The goal is not to replace Claude. It is to add an independent second reviewer from a different family — the same way you would not let the author of a PR be its only reviewer.
 
 ---
 
-## Why Not Just Use Codex?
+## Why DeepSeek (and not Codex)?
 
-[codex-plugin-cc](https://github.com/anthropics/codex-plugin-cc) pioneered the concept
-of bringing a non-Claude reviewer into the Claude Code workflow. It deserves full credit
-for establishing that pattern and making it a first-class part of the plugin ecosystem.
-ds-rescue-cc exists because of that work, not in spite of it.
+[codex-plugin-cc](https://github.com/anthropics/codex-plugin-cc) pioneered the concept of bringing a non-Claude reviewer into the Claude Code workflow. It deserves full credit for establishing that pattern. ds-rescue-cc exists because of that work, not in spite of it.
 
-The practical limitation is cost. A single Codex review call costs $0.30–0.60 USD in
-API spend at typical plan/commit sizes. That is fine for occasional use — a weekly
-architecture review, a pre-launch audit. It is expensive enough that most developers
-will not run it on every plan, every commit, every scheme comparison. The habit does
-not form.
+The practical limitation of Codex is cost. A single review call costs $0.30–0.60 at typical plan or commit sizes. That is fine for occasional use — a weekly architecture review, a pre-launch audit. It is expensive enough that most developers will not run it on every plan, every commit, every scheme comparison. The habit does not form.
 
-Habit formation in developer tooling requires that the marginal cost of one more use
-be low enough to feel free. At $0.30–0.60 per review, that threshold is not met.
+Habit formation in developer tooling requires that the marginal cost of one more use be low enough to feel free. ds-rescue is designed around a different cost curve.
 
-ds-rescue-cc is designed around a different cost curve.
+### Cost comparison
 
----
+| Tool | Per-review cost | Monthly (10 reviews/day) | Habit-forming? |
+|---|---|---|---|
+| Codex GPT-5 high | $0.30–0.60 | $90–180 | No — too costly for daily habit |
+| ds-rescue (DeepSeek v4-pro) | ~$0.01 | ~$3 | Yes — review every plan and commit |
+| ds-rescue (DeepSeek v4-flash) | ~$0.002 | ~$0.60 | Yes — review every prompt iteration |
 
-## Why DeepSeek: Engineering Economics + Cross-Family Complementarity
+At $0.01 per review, the economic barrier to habitual use effectively disappears. Running a review on every meaningful commit feels free — because, at that price point, it is.
 
-### Cost
+### Why DeepSeek specifically
 
-DeepSeek v4-pro costs approximately **$0.01 per review call** at typical input/output
-sizes. That is 50x cheaper than an equivalent Codex review call.
-
-At $0.01 per review, the economic barrier to habitual use effectively disappears.
-Running a review on every meaningful commit feels free — because, at that price point,
-it is. This is the primary engineering argument for DeepSeek as the review engine.
-
-### Quality
-
-DeepSeek v4-pro approaches GPT-4-class performance on SWE-Bench and coding benchmarks.
-For the review use case — analyzing a plan document or git diff and surfacing issues —
-the quality difference versus the most expensive alternatives is not material. It is
-good enough to catch real bugs, as the example above demonstrates.
-
-### Cross-Family Complementarity
-
-DeepSeek is trained on a different data distribution with different architectural choices
-than OpenAI or Anthropic models. This is the property that makes it valuable as a
-reviewer: its blind spots are different. When combined with Claude-authored plans,
-you get genuine independent review, not a paraphrase of the author's own analysis.
-
-### Chinese-Domain Reasoning Depth
-
-For teams working in Chinese or on problems where Chinese-language technical literature
-is relevant (manufacturing systems, logistics infrastructure, policy analysis), DeepSeek's
-Chinese-language reasoning quality is noticeably stronger than most Western-origin models.
-This is not a secondary feature — for certain domains it is the primary differentiator.
+- **Cross-family complementarity**: trained on a different data distribution than OpenAI or Anthropic models, so its blind spots do not overlap with Claude's
+- **Chinese-domain reasoning depth**: for teams working in Chinese or on manufacturing / logistics / policy problems, DeepSeek's Chinese-language reasoning quality is noticeably stronger than most Western-origin models
+- **SWE-Bench quality**: approaches GPT-4-class performance on coding benchmarks — good enough to catch real bugs, as the example above demonstrates
 
 ---
 
-## Three Modes: What ds-rescue Does
+## Quickstart (60 seconds)
 
-ds-rescue operates in three modes, matching the three review contexts in a typical
-development workflow:
-
-| Mode | What it reviews | When to use |
-|------|----------------|-------------|
-| `plan` | Implementation plan documents (task DAGs, architecture decisions, risk registers) | Before starting a feature or sprint |
-| `scheme` | Scheme comparison tables (A vs B vs C analysis, option trade-offs) | When choosing between architectural alternatives |
-| `execution` | Git diff of the last commit or staged changes | After finishing a unit of work, before push |
-
-ds-rescue is **not** a chat replacement. It does not answer questions or generate code.
-It is a single-purpose reviewer: give it a document or a diff, get back structured
-findings from a model that was not involved in producing the artifact under review.
-
-The prompt behavior for each mode is defined in
-`plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md`. That file is the single
-source of truth for what ds-rescue says and how it formats its output — you can read
-it, fork it, and customize it without touching any Go code.
-
----
-
-## Quickstart: 60 Seconds to First Review
-
-### Step 1: Install the binary
-
-**Linux / macOS:**
-
-```bash
-curl -L https://github.com/zred0627/ds-rescue-cc/releases/latest/download/ds-rescue-linux-amd64 \
-  -o ds-rescue && chmod +x ds-rescue && sudo mv ds-rescue /usr/local/bin/
-```
-
-For macOS (Apple Silicon):
-
-```bash
-curl -L https://github.com/zred0627/ds-rescue-cc/releases/latest/download/ds-rescue-darwin-arm64 \
-  -o ds-rescue && chmod +x ds-rescue && sudo mv ds-rescue /usr/local/bin/
-```
-
-**Windows (PowerShell):**
-
-```powershell
-Invoke-WebRequest -Uri https://github.com/zred0627/ds-rescue-cc/releases/latest/download/ds-rescue-windows-amd64.exe `
-  -OutFile ds-rescue.exe
-# Move to a directory in your PATH, e.g.:
-Move-Item ds-rescue.exe "$env:LOCALAPPDATA\Programs\ds-rescue\ds-rescue.exe"
-```
-
-**Go install (any platform with Go 1.22+):**
+### Recommended for all OSes: install via Go
 
 ```bash
 go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest
 ```
 
-### Step 2: Set your DeepSeek API key
+Why this is the universal first choice:
+
+- Works identically on Linux, macOS, and Windows
+- **Bypasses Windows Smart App Control** — your binary, compiled locally, no Mark-of-the-Web flag
+- Always builds from your pinned Go toolchain
+- Requires Go 1.22+ (install from [go.dev/dl](https://go.dev/dl/) if needed)
+
+### Linux / macOS: curl-pipe pre-built binary
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zred0627/ds-rescue-cc/main/scripts/install.sh | sh
+```
+
+### Windows: PowerShell installer (with SAC detection)
+
+```powershell
+iwr https://raw.githubusercontent.com/zred0627/ds-rescue-cc/main/scripts/install.ps1 | iex
+```
+
+> **Note**: if Windows Smart App Control is ON, the installer detects it and falls back to `go install` instructions automatically. See the [Smart App Control section](#why-smart-app-control-blocks-our-binary-technical-deep-dive) for details.
+
+### Set your API key
 
 ```bash
 # Option A: environment variable (recommended for CI)
 export DEEPSEEK_API_KEY=sk-your-key-here
 
-# Option B: key file (recommended for interactive use, survives shell restarts)
+# Option B: key file (survives shell restarts)
 mkdir -p ~/.ds-rescue && echo "sk-your-key-here" > ~/.ds-rescue/key && chmod 600 ~/.ds-rescue/key
 ```
 
 Get a DeepSeek API key at [platform.deepseek.com](https://platform.deepseek.com).
 
-### Step 3: Run your first review
+### First review
 
 ```bash
-# Review a plan document
-ds-rescue --mode plan path/to/your-plan.md
-
-# Review a scheme comparison
-ds-rescue --mode scheme path/to/scheme-comparison.md
-
-# Review your last commit
-ds-rescue --mode execution
+ds-rescue --check                              # self-diagnose: key, binary, SKILL.md, model
+ds-rescue docs/plans/my-feature.md            # plan mode (auto-detected by file content)
+ds-rescue --scheme architecture-choices.md    # scheme mode
+ds-rescue --execution                         # review last commit
 ```
-
-### Self-check
-
-```bash
-ds-rescue --check
-```
-
-This verifies: key found, binary version OK, SKILL.md loadable, model responds.
 
 ---
 
-## Claude Code Plugin: One-Click Install
-
-If you use Claude Code (claude.ai/code), you can install ds-rescue as a plugin
-that adds a `/ds-rescue` slash command to your sessions:
+## Claude Code plugin install
 
 ```
 /plugin marketplace add zred0627/ds-rescue-cc
 /plugin install ds-rescue
 ```
 
-After installation, use it directly from the Claude Code prompt:
+Then use `/ds-rescue <file>` from any Claude Code session:
 
 ```
 /ds-rescue --plan path/to/plan.md
@@ -222,37 +212,165 @@ After installation, use it directly from the Claude Code prompt:
 /ds-rescue --execution
 ```
 
-The plugin also registers a `SessionStart` hook that checks for the ds-rescue binary
-on startup and offers to install it if missing. The check is a single `test -f` call
-and adds no perceptible latency to session start.
+The plugin registers a `SessionStart` hook that checks for the ds-rescue binary and recommends `go install` if it is missing. It also sets `$CLAUDE_PLUGIN_ROOT` so the binary finds `SKILL.md` automatically, and surfaces findings inline in the conversation.
 
-### What the plugin provides on top of the CLI
-
-The plugin wrapper:
-- Sets `$CLAUDE_PLUGIN_ROOT` so the binary finds SKILL.md automatically
-- Surfaces findings inline in the Claude Code conversation
-- Lets you reference findings in follow-up messages without leaving the session
-
-The underlying binary is identical to the standalone CLI — the plugin is a thin
-integration layer, not a separate product.
+The underlying binary is identical to the standalone CLI — the plugin is a thin integration layer, not a separate product.
 
 ---
 
-## Universal CLI: Works in Any Environment
+## How it works
 
-ds-rescue is a standard CLI binary. It works in any environment where you can run
-a shell command — no Claude Code required.
+```
+  Your plan / scheme / git diff
+          │
+          ▼
+    ds-rescue CLI
+    ─────────────────────────────────────────────────────
+    │  1. Loads SKILL.md (defines review persona + schema)
+    │  2. Composes prompt for selected mode
+    │  3. Calls DeepSeek API (v4-pro by default)
+    │  4. Optional agentic tool-use loop (read_file / write_file / bash_exec)
+    │     up to 20 rounds, deny-list protected
+    │  5. Returns structured findings to stdout
+    ─────────────────────────────────────────────────────
+          │
+          ▼
+    Adversarial findings (stdout)
+    Diagnostics (stderr)
+```
+
+The three-mode review behavior is fully defined in `plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md`. That file is loaded from disk at runtime — it is not embedded in the binary. You can customize it without touching Go code.
+
+---
+
+## FAQ
+
+### How is ds-rescue different from codex-plugin-cc?
+
+| Dimension | codex-plugin-cc | ds-rescue |
+|---|---|---|
+| Language / runtime | Node.js | Go (single binary, no runtime) |
+| Model family | OpenAI (GPT-5) | DeepSeek (v4-pro / v4-flash / R1) |
+| Cost per review | $0.30–0.60 | ~$0.01 (pro) / ~$0.002 (flash) |
+| Chinese reasoning quality | Standard | Stronger for CN-domain problems |
+| Distribution (Windows) | npm install | `go install` (SAC-safe) or pre-built binary |
+| Pioneer credit | Yes — established the pattern | Builds on that foundation |
+
+Both tools belong in the ecosystem. They are complements, not competitors.
+
+### Does ds-rescue support OpenAI / Claude / Gemini?
+
+No, by design. The cross-family value comes specifically from using a different model family than the one that wrote the artifact. If you want a DeepSeek review of a Claude-authored plan, ds-rescue delivers that. If you want a GPT-5 review, use codex-plugin-cc.
+
+### Why does Smart App Control block the Windows download?
+
+Windows 11 (25H2 and later) ships with Smart App Control (SAC) turned ON by default. SAC blocks execution of downloaded binaries that carry the Mark of the Web (MOTW) zone flag — which any file downloaded from the internet via a browser or `Invoke-WebRequest` receives automatically.
+
+Our pre-built binary is unsigned. Extended Validation (EV) code signing costs $300–500/year and requires organizational verification. That is not feasible for a free open-source project maintained by a single developer.
+
+Three workarounds, in order of preference:
+
+1. **Recommended — compile locally** (no MOTW, SAC trusts by default):
+   ```powershell
+   go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest
+   ```
+
+2. **Unblock the downloaded file** (right-click → Properties → Unblock, or PowerShell):
+   ```powershell
+   Unblock-File "$env:USERPROFILE\bin\ds-rescue.exe"
+   ```
+
+3. **Add an exclusion** (requires Administrator):
+   ```powershell
+   Add-MpPreference -ExclusionPath "$env:USERPROFILE\bin\ds-rescue.exe"
+   ```
+
+The install.ps1 script detects your SAC state and prints the appropriate guidance automatically.
+
+### How much does daily usage cost?
+
+Concrete math: 10 plan or commit reviews per day × $0.01 per review = $0.10/day = ~$3/month. That is comparable to a single cup of coffee per month, or less than 2% of a comparable Codex habit ($90–180/month at the same cadence).
+
+At the flash model: 10 reviews/day × $0.002 = $0.60/month.
+
+### Can I customize the review persona?
+
+Yes. Fork or edit `SKILL.md` at `plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md`. The file has three sections (`## Plan Mode`, `## Scheme Mode`, `## Execution Mode`), each containing the system prompt and output schema for that review type.
+
+Point ds-rescue at your custom version:
+
+```bash
+export DS_RESCUE_SKILL_PATH=/path/to/your/SKILL.md
+```
+
+Or per-invocation:
+
+```bash
+ds-rescue --skill /path/to/your/SKILL.md --plan my-plan.md
+```
+
+Ideas for custom lenses: finance / investment memo audit, security audit (injection surfaces, auth boundaries), infrastructure-as-code review (rollback paths, blast radius), Chinese-language reasoning depth mode.
+
+### Is my code sent to DeepSeek's servers?
+
+Yes, as with any LLM API call. The plan document, scheme comparison, or git diff is sent to DeepSeek's API servers for processing. This is identical to the data sharing that occurs when using Codex, Claude API, or Gemini API. If your organization's policy prohibits sending proprietary code to external LLM APIs, that constraint applies to ds-rescue as it does to all LLM-powered tools.
+
+### Do I need an internet connection?
+
+Yes. ds-rescue always calls the DeepSeek API. There is no offline or local-model mode.
+
+### Which DeepSeek models are supported?
+
+| Alias | Model | Characteristics |
+|---|---|---|
+| `pro` (default) | deepseek-chat (v4-pro) | Best quality, ~$0.01/review |
+| `flash` | deepseek-chat-fast | Faster, ~$0.002/review |
+| `reasoner` | deepseek-reasoner (R1) | Deep chain-of-thought reasoning |
+| `chat` | deepseek-chat (legacy) | Alias for compatibility |
+
+Select with `--model pro`, `--model flash`, or `--model reasoner`.
+
+### Can I use this without Claude Code?
+
+Yes — ds-rescue is a universal CLI. Examples for other LLM coding tools:
+
+```bash
+# opencode
+ds-rescue --mode plan docs/plans/current-plan.md
+
+# Aider
+ds-rescue --mode execution && aider --message "fix the issues found by ds-rescue"
+
+# Plain bash / pre-push hook
+ds-rescue --mode execution --no-tools || echo "Review found issues — check stderr"
+
+# stdin pipe
+git diff HEAD~1 HEAD | ds-rescue --mode execution --stdin
+```
+
+### How do I update?
+
+```bash
+# Re-run the same install command — always fetches latest
+go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest
+
+# If using the Claude Code plugin
+/plugin update ds-rescue
+```
+
+---
+
+## Universal CLI usage (non-Claude-Code)
+
+ds-rescue is a standard CLI binary. It works in any environment where you can run a shell command.
 
 **opencode:**
 
 ```bash
-# In your opencode tool configuration or terminal panel
 ds-rescue --mode plan docs/plans/current-plan.md
 ```
 
-**Continue (VS Code / JetBrains):**
-
-Add a custom command in your Continue configuration:
+**Continue (VS Code / JetBrains) — add a custom command:**
 
 ```json
 {
@@ -265,23 +383,20 @@ Add a custom command in your Continue configuration:
 **Aider:**
 
 ```bash
-# Run before an aider session to review the current state
 ds-rescue --mode execution && aider --message "fix the issues found by ds-rescue"
 ```
 
-**Bare shell / CI:**
+**Bare shell / CI pre-push hook:**
 
 ```bash
-# In a pre-push hook or CI step
 ds-rescue --mode execution --no-tools || echo "Review found issues — check stderr"
 ```
 
-The binary reads from `stdin` or a file argument, writes findings to `stdout`,
-and logs diagnostics to `stderr`. It is composable with any toolchain.
+The binary reads from `stdin` or a file argument, writes findings to `stdout`, and logs diagnostics to `stderr`. It is composable with any toolchain.
 
 ---
 
-## Customizing the Skill Prompts
+## Customize the review persona
 
 The three-mode review behavior is defined in a single Markdown file:
 
@@ -289,14 +404,10 @@ The three-mode review behavior is defined in a single Markdown file:
 plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md
 ```
 
-This file has three sections (`## Plan Mode`, `## Scheme Mode`, `## Execution Mode`),
-each containing the system prompt and output schema for that review type. The binary
-reads this file at runtime — it is not embedded in the binary.
-
-**To customize:**
+This file has three sections — `## Plan Mode`, `## Scheme Mode`, `## Execution Mode` — each containing the system prompt and output schema for that review type. The binary reads this file at runtime; it is not embedded in the binary.
 
 ```bash
-# Fork the repository, edit SKILL.md to your taste
+# Fork the repo, edit SKILL.md to your taste
 vim plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md
 
 # Point ds-rescue at your custom version
@@ -307,23 +418,27 @@ ds-rescue --mode plan my-plan.md
 ds-rescue --skill /path/to/your/SKILL.md --mode plan my-plan.md
 ```
 
-**Ideas for custom lenses:**
+Example fork ideas:
 
-- Finance / investment memo review (flag missing assumptions, check DCF inputs)
-- Security audit lens (flag injection surfaces, auth boundaries, secret handling)
-- Infrastructure-as-code review (flag missing rollback paths, blast radius)
-- Chinese-language reasoning mode (deeper analysis for CN-market context)
+- **Finance / investment memo review**: flag missing assumptions, check DCF inputs, challenge revenue projections
+- **Security audit lens**: flag injection surfaces, auth boundaries, secret handling
+- **Infrastructure-as-code review**: flag missing rollback paths, blast radius, dependency ordering
+- **Chinese-language reasoning depth**: deeper analysis for CN-market context (manufacturing, logistics, policy)
 
-Because SKILL.md is plain Markdown and the binary loads it from disk, you can
-maintain a fleet of specialized review prompts and switch between them with a
-single flag. No Go knowledge required to contribute prompt improvements — a PR
-that improves the SKILL.md is as valuable as a PR that improves the Go code.
+A PR that improves `SKILL.md` is as valuable as a PR that improves the Go code. No Go knowledge required.
 
 ---
 
-## SKILL.md Path Resolution
+## Configuration
 
-The binary looks for SKILL.md in this priority order:
+### API key resolution priority
+
+1. `$DEEPSEEK_API_KEY` environment variable (highest priority)
+2. `$XDG_CONFIG_HOME/ds-rescue/key` (Linux/macOS XDG standard)
+3. `%APPDATA%\ds-rescue\key` (Windows)
+4. `~/.ds-rescue/key` (fallback for all platforms)
+
+### SKILL.md path resolution priority
 
 1. `--skill <path>` CLI flag (highest priority)
 2. `$DS_RESCUE_SKILL_PATH` environment variable
@@ -331,69 +446,91 @@ The binary looks for SKILL.md in this priority order:
 4. `~/.ds-rescue/skills/ds-plan-challenger/SKILL.md` (user-installed standalone)
 5. If none found: binary exits with an error listing all paths attempted
 
-Run `ds-rescue --check` to see which path was resolved and confirm the file is loadable.
+### CLI flags reference
+
+| Flag | Default | Description |
+|---|---|---|
+| `--mode {plan\|scheme\|execution}` | auto-detect | Review mode |
+| `--plan` | — | Alias for `--mode plan` |
+| `--scheme` | — | Alias for `--mode scheme` |
+| `--execution` | — | Alias for `--mode execution` |
+| `--skill <path>` | (see above) | Path to SKILL.md |
+| `--model {pro\|flash\|reasoner}` | `pro` | DeepSeek model alias |
+| `--api-timeout <seconds>` | `90` | API call timeout |
+| `--exec-timeout <seconds>` | `30` | Per-tool-call timeout |
+| `--no-tools` | false | Disable agentic tool-use loop |
+| `--verbose` | false | Log every tool call to stderr |
+| `--version` | — | Print version and git commit |
+| `--check` | — | Self-check: key, binary, SKILL.md, model response |
 
 ---
 
-## Agentic Tool Use
+## Why Smart App Control blocks our binary (technical deep-dive)
 
-In the default mode, ds-rescue runs the DeepSeek model in an **agentic tool-use loop**
-(up to 20 rounds). The model can invoke three tools during a review session:
+Windows 11 25H2 introduced Smart App Control (SAC) as a default-ON security feature. SAC evaluates every executable before it runs. For executables it cannot verify via Microsoft's reputation service or a trusted code-signing certificate, SAC checks for the Mark of the Web (MOTW) zone flag.
+
+Any file downloaded from the internet — via a browser, `curl`, `Invoke-WebRequest`, or a GitHub Releases download — automatically receives `ZoneId=3` (Internet zone) in an NTFS alternate data stream. SAC blocks execution of such files unless:
+
+- The file is signed with an Extended Validation (EV) certificate trusted by Microsoft, or
+- The file has established a Microsoft reputation score (typically requires millions of downloads), or
+- The MOTW flag is removed (via Unblock-File or the Properties dialog).
+
+Our binary is unsigned because EV code signing costs $300–500/year and requires organizational verification — not feasible for a free open-source tool.
+
+**The cleanest solution is `go install`**: when Go compiles the binary locally, the resulting executable is written to your local `$GOPATH/bin` without any MOTW flag. SAC has no basis to block it. This is why `go install` is the recommended installation method for Windows users.
+
+Three workarounds in full:
+
+```powershell
+# 1. Compile locally — no MOTW, SAC-safe (RECOMMENDED)
+go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest
+
+# 2. Unblock after download (removes MOTW flag from a specific file)
+Unblock-File "$env:USERPROFILE\bin\ds-rescue.exe"
+
+# 3. Add an exclusion (requires Administrator, affects Defender + SAC)
+Add-MpPreference -ExclusionPath "$env:USERPROFILE\bin\ds-rescue.exe"
+```
+
+The `install.ps1` script checks `(Get-MpComputerStatus).SmartAppControlState` at install time and prints the appropriate guidance if SAC is ON.
+
+---
+
+## Agentic tool use
+
+In the default mode, ds-rescue runs DeepSeek in an agentic tool-use loop (up to 20 rounds). The model can invoke three tools during a review session:
 
 | Tool | What it does |
-|------|-------------|
+|---|---|
 | `read_file` | Read a file at a given path (for inspecting referenced code or configs) |
 | `write_file` | Write a file (for generating structured output or fix suggestions) |
 | `bash_exec` | Execute a shell command (for running `git log`, `grep`, or similar) |
 
-The tool-use loop is protected by a deny-pattern list. Commands matching patterns
-for `sudo`, `rm -rf /`, fork bombs, or credential exfiltration via curl are
-rejected before execution. Use `--no-tools` to disable agentic mode entirely
-and run as a single-shot reviewer.
-
----
-
-## CLI Reference
-
-```
-ds-rescue [flags] [<input-file>]
-
-Flags:
-  --mode {plan|scheme|execution}   Review mode (default: auto-detected)
-  --plan                           Alias for --mode plan
-  --scheme                         Alias for --mode scheme
-  --execution                      Alias for --mode execution
-  --skill <path>                   Path to SKILL.md (overrides env / plugin / home lookup)
-  --model {pro|flash|reasoner}     DeepSeek model alias (default: pro = deepseek-chat)
-  --api-timeout <seconds>          API call timeout (default: 90)
-  --exec-timeout <seconds>         Per-tool-call timeout (default: 30)
-  --no-tools                       Disable agentic tool-use loop
-  --verbose                        Log every tool call to stderr
-  --version                        Print version and git commit
-  --check                          Self-check: key found? binary OK? SKILL.md loadable? model responds?
-```
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-Copyright (c) 2026 Daniel
+The tool-use loop is protected by a deny-pattern list. Commands matching patterns for `sudo`, `rm -rf /`, fork bombs, or credential exfiltration via curl are rejected before execution. Use `--no-tools` to disable agentic mode entirely.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, commit message
-format, and security rules. PRs on SKILL.md prompt definitions are especially welcome —
-you can meaningfully improve ds-rescue without writing any Go.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, commit message format, and security rules. PRs on `SKILL.md` prompt definitions are especially welcome — you can meaningfully improve ds-rescue without writing any Go.
 
 ---
 
-## Acknowledgements
+## License
 
-[codex-plugin-cc](https://github.com/anthropics/codex-plugin-cc) established the
-pattern of bringing a non-Claude reviewer into the Claude Code workflow. ds-rescue-cc
-builds on that foundation with a different cost profile and a different model family.
-The approach would not exist without that pioneer work.
+MIT — see [LICENSE](./LICENSE)
+
+Copyright (c) 2026 Daniel
+
+---
+
+## Related work / Citations
+
+- [codex-plugin-cc](https://github.com/anthropics/codex-plugin-cc) — the pioneer of bringing cross-family LLM review into Claude Code
+- [DeepSeek API documentation](https://api-docs.deepseek.com/) — official API reference for supported models and pricing
+- [Smart App Control overview](https://learn.microsoft.com/en-us/windows/apps/develop/smart-app-control/overview) — Microsoft's official SAC documentation
+- [Generative Engine Optimization](https://en.wikipedia.org/wiki/Generative_engine_optimization) — README structure principles for AI search visibility
+
+---
+
+Maintained by [Daniel (zred0627)](https://github.com/zred0627) · v0.1.0 (2026-05)
