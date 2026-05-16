@@ -1,0 +1,17 @@
+{
+  "name": "ds-rescue-cc",
+  "owner": { "name": "Daniel (zred0627)" },
+  "metadata": {
+    "description": "DeepSeek-powered cross-family adversarial review for Claude Code (and other LLM CLIs). 50x cheaper than Codex, enables habitual second-opinion workflow.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "ds-rescue",
+      "description": "Three-mode review (plan/scheme/execution) via DeepSeek API. Plug-and-play installer fetches platform binary on first use.",
+      "version": "0.1.0",
+      "author": { "name": "Daniel (zred0627)" },
+      "source": "./plugins/ds-rescue"
+    }
+  ]
+}
