@@ -1,0 +1,58 @@
+version: 2
+
+project_name: ds-rescue
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: ds-rescue
+    main: ./cmd/ds-rescue
+    binary: ds-rescue
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+
+archives:
+  - id: default
+    builds: [ds-rescue]
+    name_template: "ds-rescue_{{.Version}}_{{.Os}}_{{.Arch}}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+      - README.zh.md
+      - plugins/ds-rescue/skills/ds-plan-challenger/SKILL.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
