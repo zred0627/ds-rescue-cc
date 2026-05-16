@@ -1,0 +1,43 @@
+# Binaries / build artifacts
+ds-rescue
+ds-rescue.exe
+dist/
+bin/
+*.exe
+*.test
+*.out
+
+# Secrets — NEVER commit any of these
+.deepseek-key
+*.deepseek-key
+.deepseek*
+api_key
+api-key
+apikey
+*.api_key
+*.api-key
+.env
+.env.*
+.env.local
+.env.production
+secrets/
+.config/ds-rescue/
+.ds-rescue/
+
+# Go toolchain
+vendor/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# goreleaser outputs
+dist/
+
+# Test coverage
+coverage.out
+coverage.html
