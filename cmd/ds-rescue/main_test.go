@@ -1,18 +1,19 @@
 package main
 
 import (
-	"os/exec"
 	"strings"
 	"testing"
 )
 
-func TestVersionFlag(t *testing.T) {
-	cmd := exec.Command("go", "run", ".", "--version")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("exit error: %v, output: %s", err, out)
+// TestVersionString verifies the version line is well-formed without spawning
+// a subprocess (avoids Windows Smart App Control blocking go-build temp binaries
+// and avoids cwd-sensitivity of `go run .`).
+func TestVersionString(t *testing.T) {
+	got := versionString()
+	if !strings.HasPrefix(got, "ds-rescue v") {
+		t.Errorf("expected prefix 'ds-rescue v', got: %q", got)
 	}
-	if !strings.Contains(string(out), "ds-rescue v") {
-		t.Errorf("expected version string with 'ds-rescue v' prefix, got: %s", out)
+	if !strings.Contains(got, Version) {
+		t.Errorf("expected version %q embedded, got: %q", Version, got)
 	}
 }

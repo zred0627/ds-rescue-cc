@@ -41,3 +41,6 @@ dist/
 # Test coverage
 coverage.out
 coverage.html
+
+# Local test binary cache (Smart App Control workaround — see CONTRIBUTING.md)
+.test-bin/

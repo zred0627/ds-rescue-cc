@@ -11,6 +11,13 @@ import (
 
 var Version = "0.0.1-dev"
 
+// versionString returns the user-facing version line. Extracted for testability
+// (avoids spawning a subprocess in tests, which trips Windows Smart App Control
+// when the test binary lives in %LOCALAPPDATA%\Temp\go-build\).
+func versionString() string {
+	return fmt.Sprintf("ds-rescue v%s", Version)
+}
+
 func main() {
 	var f config.Flags
 	flag.StringVar(&f.Mode, "mode", "", "review mode: plan | scheme | execution (default auto-detect)")
@@ -43,7 +50,7 @@ func main() {
 	}
 
 	if f.Version {
-		fmt.Printf("ds-rescue v%s\n", Version)
+		fmt.Println(versionString())
 		os.Exit(0)
 	}
 
@@ -63,7 +70,7 @@ func main() {
 	}
 
 	if f.Check {
-		fmt.Printf("ds-rescue v%s\n", Version)
+		fmt.Println(versionString())
 		fmt.Printf("  API key: found via %s\n", src)
 		fmt.Printf("  Skill:   %s\n", f.SkillPath)
 		if _, err := os.Stat(f.SkillPath); err != nil {
