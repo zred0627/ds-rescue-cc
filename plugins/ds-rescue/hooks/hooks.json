@@ -1,0 +1,16 @@
+{
+  "description": "Auto-check ds-rescue binary on SessionStart; offer install if missing",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test -x \"$CLAUDE_PLUGIN_ROOT/bin/ds-rescue\" || command -v ds-rescue >/dev/null || echo \"ds-rescue binary not installed. Run /ds-rescue:install or: curl -fsSL https://raw.githubusercontent.com/zred0627/ds-rescue-cc/main/scripts/install.sh | sh\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

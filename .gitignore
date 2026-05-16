@@ -1,6 +1,6 @@
 # Binaries / build artifacts
-ds-rescue
-ds-rescue.exe
+/ds-rescue
+/ds-rescue.exe
 dist/
 bin/
 *.exe
