@@ -3,6 +3,7 @@ package loop
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/zred0627/ds-rescue-cc/internal/deepseek"
@@ -19,9 +20,21 @@ type toolResult struct {
 	content string
 }
 
+// emitHeartbeat writes a single observational line to stderr at the start of
+// each agentic round. stdout is reserved for the final DeepSeek answer; the
+// wrapping ds-rescue agent (plugins/ds-rescue/agents/ds-rescue.md) tails
+// stderr for the last "progress: round N/20" line when Bash times out, so the
+// caller can tell whether the binary hung on round 1 (likely API/network) or
+// made real progress before the wrapper killed it.
+func emitHeartbeat(round int, toolCalls int) {
+	fmt.Fprintf(os.Stderr, "progress: round %d/%d (tool_calls=%d)\n", round, MaxRounds, toolCalls)
+}
+
 func Run(client *deepseek.Client, req deepseek.ChatRequest, opts Options) (string, int, error) {
 	messages := req.Messages
+	totalToolCalls := 0
 	for round := 1; round <= MaxRounds; round++ {
+		emitHeartbeat(round, totalToolCalls)
 		req.Messages = messages
 		resp, err := client.Call(req)
 		if err != nil {
@@ -37,6 +50,7 @@ func Run(client *deepseek.Client, req deepseek.ChatRequest, opts Options) (strin
 			return choice.Message.Content, round, nil
 		}
 
+		totalToolCalls += len(choice.Message.ToolCalls)
 		messages = append(messages, dispatchParallel(choice.Message.ToolCalls, opts)...)
 	}
 	return "", MaxRounds, fmt.Errorf("max rounds (%d) exceeded without final answer", MaxRounds)

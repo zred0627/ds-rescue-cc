@@ -42,11 +42,47 @@ DS_RESCUE_SKILL_PATH="$CLAUDE_PLUGIN_ROOT/skills/ds-plan-challenger/SKILL.md" \
   "$CLAUDE_PLUGIN_ROOT/bin/ds-rescue" --mode execution
 ```
 
+### Bash tool parameters (MUST set explicitly)
+
+The Go binary's internal `-api-timeout` defaults to 600s. Claude Code's Bash
+tool defaults to 120s — if you don't override it, a healthy DeepSeek round can
+be killed mid-flight and your wrapper will see an opaque timeout. Always pass:
+
+- `timeout: 600000` (10 minutes in milliseconds — matches the binary's `-api-timeout=600`)
+- `run_in_background: false` (synchronous stdout is required)
+
 ## Output handling
 
 The binary returns structured findings per the SKILL.md output schema (Executive Summary + Findings by severity + Cross-Section Validation). Return verbatim to the user — they want raw adversarial output, not a sympathetic summary.
 
 If the binary returns a non-zero exit code, return the stderr message as-is along with a hint to run `/ds-rescue --check` for self-diagnosis.
+
+### No-fabrication hard rule (Bash-level failure)
+
+The Bash tool itself may fail BEFORE the Go binary returns stdout — e.g. the
+10-minute timeout fires, the process is killed, the binary segfaults, or the
+shell cannot resolve the binary path. In ALL such cases you MUST NOT:
+
+- write a placeholder like "task in progress" / "awaiting completion" /
+  "still running, please wait" / any localised equivalent
+- invent a partial DeepSeek answer to "fill the gap"
+- enter free-form reasoning mode
+
+You MUST instead return ONE block to stdout verbatim and stop:
+
+```text
+ERROR: ds-rescue bash-level failure
+- Bash exit signal: <timeout | killed | not-found | other>
+- Wall-clock elapsed: <Ns>
+- Captured stdout (may be empty): <verbatim, or "<empty>">
+- Captured stderr (may be empty): <verbatim, or "<empty>">
+- Heartbeat last seen: <last "progress: round N/20 ..." line from stderr, or "<none>">
+```
+
+Silent fabrication is the worst possible outcome for an adversarial-review
+agent — it makes the system look like DeepSeek delivered a verdict when it did
+not, which propagates wrong conclusions downstream. The caller decides whether
+to retry; do not retry automatically.
 
 ## Errors / Edge cases
 
@@ -55,6 +91,22 @@ If the binary returns a non-zero exit code, return the stderr message as-is alon
 - **SKILL.md path mismatch** → unlikely with bundled plugin; if happens, suggest `--skill <abs-path>` override
 - **Network timeout** → suggest `--model flash` (faster fallback)
 - **Rate limit (429)** → binary retries with backoff; if still failing, suggest wait + retry
+- **Bash timeout / killed / hang** → see the No-fabrication hard rule above; never invent a placeholder answer
+
+### Progress heartbeat (read-only signal)
+
+The Go binary emits a one-line heartbeat to stderr at the start of every
+agentic round:
+
+```text
+progress: round N/20 (tool_calls=K)
+```
+
+Treat this as observational signal only — do NOT interpret, summarise, or
+forward it as DeepSeek's answer. If Bash times out, capture the last such line
+verbatim into the "Heartbeat last seen" slot of the error block above; that
+tells the caller whether DeepSeek hung on round 1 (likely API/network) or made
+real progress (e.g. hung on round 14 after doing real work).
 
 ## Boundaries
 
