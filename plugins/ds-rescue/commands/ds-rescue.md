@@ -25,8 +25,10 @@ if [ ! -x "$BINARY" ]; then
   BINARY="$(command -v ds-rescue 2>/dev/null)"
 fi
 if [ -z "$BINARY" ]; then
-  echo "ds-rescue binary not found. Run /ds-rescue:install or:"
-  echo "  curl -L https://github.com/zred0627/ds-rescue-cc/releases/latest/download/ds-rescue-\$(uname -s | tr A-Z a-z)-\$(uname -m) -o /usr/local/bin/ds-rescue && chmod +x /usr/local/bin/ds-rescue"
+  echo "ds-rescue binary not found. Install with one of:"
+  echo "  Recommended:  go install github.com/zred0627/ds-rescue-cc/cmd/ds-rescue@latest"
+  echo "  Linux/macOS:  curl -fsSL https://raw.githubusercontent.com/zred0627/ds-rescue-cc/main/scripts/install.sh | sh"
+  echo "  Windows:      iwr https://raw.githubusercontent.com/zred0627/ds-rescue-cc/main/scripts/install.ps1 | iex"
   exit 1
 fi
 

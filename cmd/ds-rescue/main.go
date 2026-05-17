@@ -11,9 +11,6 @@ import (
 
 var Version = "0.0.1-dev"
 
-// versionString returns the user-facing version line. Extracted for testability
-// (avoids spawning a subprocess in tests, which trips Windows Smart App Control
-// when the test binary lives in %LOCALAPPDATA%\Temp\go-build\).
 func versionString() string {
 	return fmt.Sprintf("ds-rescue v%s", Version)
 }
@@ -21,7 +18,6 @@ func versionString() string {
 func main() {
 	var f config.Flags
 	flag.StringVar(&f.Mode, "mode", "", "review mode: plan | scheme | execution (default auto-detect)")
-	// mode aliases (matches plugin command flags)
 	var planAlias, schemeAlias, execAlias bool
 	flag.BoolVar(&planAlias, "plan", false, "alias for --mode plan")
 	flag.BoolVar(&schemeAlias, "scheme", false, "alias for --mode scheme")
@@ -29,7 +25,8 @@ func main() {
 	flag.StringVar(&f.SkillPath, "skill", "", "path to SKILL.md (env DS_RESCUE_SKILL_PATH alt)")
 	flag.StringVar(&f.Model, "model", "pro", "deepseek model alias: pro | flash | reasoner | chat")
 	flag.IntVar(&f.APITimeout, "api-timeout", 90, "API timeout in seconds")
-	flag.IntVar(&f.ExecTimeout, "exec-timeout", 30, "per-tool timeout in seconds")
+	flag.IntVar(&f.ExecTimeout, "exec-timeout", 30, "per-tool timeout in seconds (max cap on bash_exec)")
+	flag.IntVar(&f.MaxTokens, "max-tokens", 8000, "max output tokens")
 	flag.BoolVar(&f.NoTools, "no-tools", false, "disable agentic tool-use loop (prompt-only mode)")
 	flag.BoolVar(&f.Check, "check", false, "self-check (key found? skill loadable? model responds?)")
 	flag.BoolVar(&f.Version, "version", false, "print version and exit")
@@ -37,7 +34,6 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "log every tool-call to stderr")
 	flag.Parse()
 
-	// Resolve mode aliases (most-specific wins; --mode flag takes precedence if both set)
 	if f.Mode == "" {
 		switch {
 		case planAlias:
@@ -98,6 +94,7 @@ func main() {
 	out, err := modes.RunInput{
 		Mode: mode, SkillPath: f.SkillPath, InputFile: inputFile,
 		Model: f.Model, APIKey: apiKey, NoTools: f.NoTools,
+		APITimeout: f.APITimeout, ExecTimeout: f.ExecTimeout, MaxTokens: f.MaxTokens,
 	}.Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)

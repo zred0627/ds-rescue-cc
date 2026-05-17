@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// TestVersionString verifies the version line is well-formed without spawning
-// a subprocess (avoids Windows Smart App Control blocking go-build temp binaries
-// and avoids cwd-sensitivity of `go run .`).
 func TestVersionString(t *testing.T) {
 	got := versionString()
 	if !strings.HasPrefix(got, "ds-rescue v") {

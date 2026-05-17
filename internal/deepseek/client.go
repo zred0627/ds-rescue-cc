@@ -6,20 +6,32 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 const DefaultEndpoint = "https://api.deepseek.com/chat/completions"
 
 type Client struct {
-	Endpoint    string
-	APIKey      string
-	Timeout     int // seconds
-	MaxRetries  int // default 4
-	BaseBackoff int // base ms; default 1000
+	Endpoint      string
+	APIKey        string
+	Timeout       int
+	MaxRetries    int
+	BaseBackoff   int
+	FallbackModel string
 }
 
 func (c *Client) Call(req ChatRequest) (*ChatResponse, error) {
+	resp, err := c.callOnce(req)
+	if err != nil && c.FallbackModel != "" && c.FallbackModel != req.Model && shouldFallback(err) {
+		fallback := req
+		fallback.Model = c.FallbackModel
+		return c.callOnce(fallback)
+	}
+	return resp, err
+}
+
+func (c *Client) callOnce(req ChatRequest) (*ChatResponse, error) {
 	if c.Endpoint == "" {
 		c.Endpoint = DefaultEndpoint
 	}
@@ -76,6 +88,22 @@ func (c *Client) Call(req ChatRequest) (*ChatResponse, error) {
 		return &resp, nil
 	}
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+func shouldFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "max retries exceeded"):
+		return true
+	case strings.Contains(msg, "Client.Timeout"):
+		return true
+	case strings.Contains(msg, "non-retriable status 404"):
+		return true
+	}
+	return false
 }
 
 // ResolveModel maps user-friendly aliases to actual DeepSeek model IDs

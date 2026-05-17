@@ -10,19 +10,16 @@ import (
 
 const MaxRounds = 20
 
-// toolResult holds one dispatched tool's outcome, keyed by tool_call_id.
-// Used to preserve OpenAI-compatible ordering when dispatching concurrently.
+type Options struct {
+	MaxExecTimeoutSec int
+}
+
 type toolResult struct {
 	callID  string
 	content string
 }
 
-// Run executes the agentic tool-use loop. Returns final assistant content + rounds used.
-// When the model returns multiple tool_calls in a single response, they are dispatched
-// concurrently via goroutines (DeepSeek V4-Pro/Flash supports up to 128 parallel calls).
-// Results are written back in the original tool_calls order to satisfy the OpenAI-compatible
-// invariant that tool messages must follow the same order as the assistant's tool_calls array.
-func Run(client *deepseek.Client, req deepseek.ChatRequest) (string, int, error) {
+func Run(client *deepseek.Client, req deepseek.ChatRequest, opts Options) (string, int, error) {
 	messages := req.Messages
 	for round := 1; round <= MaxRounds; round++ {
 		req.Messages = messages
@@ -40,29 +37,23 @@ func Run(client *deepseek.Client, req deepseek.ChatRequest) (string, int, error)
 			return choice.Message.Content, round, nil
 		}
 
-		messages = append(messages, dispatchParallel(choice.Message.ToolCalls)...)
+		messages = append(messages, dispatchParallel(choice.Message.ToolCalls, opts)...)
 	}
 	return "", MaxRounds, fmt.Errorf("max rounds (%d) exceeded without final answer", MaxRounds)
 }
 
-// dispatchParallel runs every tool_call concurrently and returns the resulting tool
-// messages in the SAME order as the input slice (OpenAI-compatible requirement).
-//
-// For a single tool_call, falls back to direct dispatch to avoid goroutine overhead.
-// For ≥2 tool_calls, spawns one goroutine per call and joins via sync.WaitGroup.
-// Total wall-clock latency ≈ max(individual tool exec) instead of sum().
-func dispatchParallel(calls []deepseek.ToolCall) []deepseek.Message {
+func dispatchParallel(calls []deepseek.ToolCall, opts Options) []deepseek.Message {
 	results := make([]toolResult, len(calls))
 
 	if len(calls) == 1 {
-		results[0] = runOne(calls[0])
+		results[0] = runOne(calls[0], opts)
 	} else {
 		var wg sync.WaitGroup
 		for i := range calls {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
-				results[idx] = runOne(calls[idx])
+				results[idx] = runOne(calls[idx], opts)
 			}(i)
 		}
 		wg.Wait()
@@ -79,13 +70,12 @@ func dispatchParallel(calls []deepseek.ToolCall) []deepseek.Message {
 	return out
 }
 
-// runOne dispatches a single tool_call and returns its result (never panics on tool error).
-func runOne(tc deepseek.ToolCall) toolResult {
+func runOne(tc deepseek.ToolCall, opts Options) toolResult {
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 		args = map[string]interface{}{"_parse_error": err.Error()}
 	}
-	result, toolErr := DispatchTool(tc.Function.Name, args)
+	result, toolErr := DispatchTool(tc.Function.Name, args, opts.MaxExecTimeoutSec)
 	if toolErr != nil {
 		result = fmt.Sprintf("ERROR: %s\nOUTPUT: %s", toolErr.Error(), result)
 	}

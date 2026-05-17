@@ -31,7 +31,6 @@ func LoadSection(skillPath, mode string) (string, error) {
 	return after[:len(header)+nextHeaderIdx], nil
 }
 
-// capitalize returns the string with the first rune uppercased (stdlib replacement for deprecated strings.Title)
 func capitalize(s string) string {
 	if s == "" {
 		return s
@@ -40,12 +39,15 @@ func capitalize(s string) string {
 }
 
 type RunInput struct {
-	Mode      string
-	SkillPath string
-	InputFile string
-	Model     string
-	APIKey    string
-	NoTools   bool
+	Mode        string
+	SkillPath   string
+	InputFile   string
+	Model       string
+	APIKey      string
+	NoTools     bool
+	APITimeout  int
+	ExecTimeout int
+	MaxTokens   int
 }
 
 func (in RunInput) Run() (string, error) {
@@ -72,12 +74,23 @@ func (in RunInput) Run() (string, error) {
 		userPrompt = string(data)
 	}
 
+	resolvedModel := deepseek.ResolveModel(in.Model)
+	fallback := deepseek.ResolveModel("flash")
+	if fallback == resolvedModel {
+		fallback = ""
+	}
+
+	maxTokens := in.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 8000
+	}
 	req := deepseek.ChatRequest{
-		Model: deepseek.ResolveModel(in.Model),
+		Model: resolvedModel,
 		Messages: []deepseek.Message{
 			{Role: "system", Content: section},
 			{Role: "user", Content: userPrompt},
 		},
+		MaxTokens:   maxTokens,
 		Temperature: 0.3,
 	}
 	if !in.NoTools {
@@ -85,7 +98,11 @@ func (in RunInput) Run() (string, error) {
 		req.Tools = toolsSlice
 	}
 
-	c := &deepseek.Client{APIKey: in.APIKey}
+	c := &deepseek.Client{
+		APIKey:        in.APIKey,
+		Timeout:       in.APITimeout,
+		FallbackModel: fallback,
+	}
 	if in.NoTools {
 		resp, err := c.Call(req)
 		if err != nil {
@@ -93,7 +110,7 @@ func (in RunInput) Run() (string, error) {
 		}
 		return resp.Choices[0].Message.Content, nil
 	}
-	content, _, err := loop.Run(c, req)
+	content, _, err := loop.Run(c, req, loop.Options{MaxExecTimeoutSec: in.ExecTimeout})
 	return content, err
 }
 

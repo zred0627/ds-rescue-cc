@@ -50,9 +50,6 @@ func candidateKeyPaths() []string {
 	return paths
 }
 
-// homeDir returns the user home directory. Prefers $HOME env var (for test
-// portability and cross-platform consistency), then falls back to
-// os.UserHomeDir().
 func homeDir() string {
 	if h := os.Getenv("HOME"); h != "" {
 		return h
@@ -64,20 +61,19 @@ func homeDir() string {
 	return h
 }
 
-// Mode constants for type-safe mode handling
 const (
 	ModePlan      = "plan"
 	ModeScheme    = "scheme"
 	ModeExecution = "execution"
 )
 
-// Flags holds parsed CLI flags
 type Flags struct {
 	Mode        string
 	SkillPath   string
 	Model       string
 	APITimeout  int
 	ExecTimeout int
+	MaxTokens   int
 	NoTools     bool
 	Check       bool
 	Version     bool
