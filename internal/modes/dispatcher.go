@@ -80,17 +80,13 @@ func (in RunInput) Run() (string, error) {
 		fallback = ""
 	}
 
-	maxTokens := in.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = 8000
-	}
 	req := deepseek.ChatRequest{
 		Model: resolvedModel,
 		Messages: []deepseek.Message{
 			{Role: "system", Content: section},
 			{Role: "user", Content: userPrompt},
 		},
-		MaxTokens:   maxTokens,
+		MaxTokens:   in.MaxTokens,
 		Temperature: 0.3,
 	}
 	if !in.NoTools {

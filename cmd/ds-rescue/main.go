@@ -26,7 +26,7 @@ func main() {
 	flag.StringVar(&f.Model, "model", "pro", "deepseek model alias: pro | flash | reasoner | chat")
 	flag.IntVar(&f.APITimeout, "api-timeout", 90, "API timeout in seconds")
 	flag.IntVar(&f.ExecTimeout, "exec-timeout", 30, "per-tool timeout in seconds (max cap on bash_exec)")
-	flag.IntVar(&f.MaxTokens, "max-tokens", 8000, "max output tokens")
+	flag.IntVar(&f.MaxTokens, "max-tokens", 65536, "max output tokens (0 = omit from payload, let DeepSeek API default)")
 	flag.BoolVar(&f.NoTools, "no-tools", false, "disable agentic tool-use loop (prompt-only mode)")
 	flag.BoolVar(&f.Check, "check", false, "self-check (key found? skill loadable? model responds?)")
 	flag.BoolVar(&f.Version, "version", false, "print version and exit")
