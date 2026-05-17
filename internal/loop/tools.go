@@ -114,6 +114,24 @@ func ExecWriteFile(args map[string]interface{}) (string, error) {
 	return fmt.Sprintf("wrote %d bytes to %s", len(content), p), nil
 }
 
+// commandMentionsDeniedPath scans a bash command string for any reference to a
+// deny-listed secret path (e.g. cat ~/.ds-rescue/key, type %APPDATA%\ds-rescue\
+// key, awk '{...}' .env). This is the bash_exec counterpart to isDeniedPath()
+// which only covers the explicit `path` argument of read_file / write_file.
+// Without it the deny-path policy is trivially bypassed by spawning a subshell
+// that reads the file directly.
+func commandMentionsDeniedPath(cmd string) string {
+	// Normalise Windows backslashes to forward slashes so the same regex set
+	// (which uses forward slashes in denyPathPatterns) matches both shells.
+	norm := strings.ReplaceAll(cmd, `\`, "/")
+	for _, r := range denyPathPatterns {
+		if loc := r.FindStringIndex(norm); loc != nil {
+			return r.String()
+		}
+	}
+	return ""
+}
+
 func ExecBash(args map[string]interface{}, maxTimeoutSec int) (string, error) {
 	cmd, _ := args["cmd"].(string)
 	if cmd == "" {
@@ -126,6 +144,9 @@ func ExecBash(args map[string]interface{}, maxTimeoutSec int) (string, error) {
 		if pat.MatchString(cmd) {
 			return "", fmt.Errorf("bash_exec: command denied by safety policy (pattern: %s)", pat.String())
 		}
+	}
+	if hit := commandMentionsDeniedPath(cmd); hit != "" {
+		return "", fmt.Errorf("bash_exec: command references secret path denied by safety policy (pattern: %s)", hit)
 	}
 	timeout := DefaultExecTimeout
 	if t, ok := args["timeout_sec"].(float64); ok && t > 0 {
