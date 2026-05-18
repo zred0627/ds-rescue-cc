@@ -1,6 +1,6 @@
 {
   "name": "ds-rescue",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "DeepSeek cross-family review (plan/scheme/execution) for Claude Code. Binary auto-downloaded on SessionStart.",
   "author": { "name": "Daniel (zred0627)" }
 }
